@@ -2,7 +2,9 @@
 import argparse
 import os
 import json
+from glob import glob
 from collections import defaultdict
+from logzero import logger
 
 PLOT_ELE="""
   <div class="plot-element{tags}">
@@ -35,15 +37,57 @@ OTHER_LIST="""\n
 </ul>
 <p><a href="#top">Back to top</a></p>"""
 
+TABLETEM = """<tr> <td>{NAME}</td> <td>{CUT}</td> </tr>\n"""
+
+def makeTable(content):
+    split =[i.split("=") for i in content]
+    string = """<table style="width:20%">
+    <tr>
+    <th>Name</th>
+    <th>Cut</th>
+    </tr>
+    """
+    for item in split:
+        temp = TABLETEM
+        temp = temp.replace('{NAME}',item[0])
+        temp = temp.replace('{CUT}',item[1])
+        string += temp
+
+
+    string += """\n</table>"""
+    return string
+    
+
+
+def makeCutStr(indir):
+    cutFile = glob(os.path.abspath(indir)+"/cut.ini")
+    if cutFile == []:
+        logger.warn("Cut file not found. Using default string.")
+        return """Cut file not found this is the current default cut table, but may be incorrect.\n
+        <table style="width:20%">
+        <tr> <th>Name</th>  <th>Cut</th> </tr>
+        <tr> <td>nhit </td> <td> 15</td> </tr>
+        <tr> <td>deltaTMin </td> <td> 2000</td> </tr>
+        <tr> <td>deltaTMax </td> <td> 1000000000</td> </tr>
+        <tr> <td>posr_inner </td> <td> 5500</td> </tr>
+        <tr> <td>posr_outter </td> <td> 6500</td> </tr>
+        <tr> <td>posr_innerPSUP </td> <td> 8500</td> </tr>
+        <tr> <td>itr </td> <td> 0.55</td> </tr>
+        <tr> <td>beta14Low </td> <td> -0.12</td> </tr>
+        <tr> <td>beta14High </td> <td> 0.95</td> </tr>
+        <tr> <td>runIDLow </td> <td>  104767</td> </tr>
+        <tr> <td>runIDHigh </td> <td>  105251</td> </tr>
+        </table>"""
+    with open(cutFile[0],"r") as f:
+        content = [x.strip() for x in f.readlines() if x[0]!="#"]
+        content.remove('[cuts]')
+    return makeTable(content)
+
+    
+
 def CleanStr(arg):
 	return '-'.join(arg.split())
 
-parser = argparse.ArgumentParser()
-parser.add_argument('input', help='input directory')
-parser.add_argument('--verbose', '-v', action='store_true', help='print some info to the screen')
-parser.add_argument('--title-size', default='100', help='scale the text size of the plot titles, expressed as a percentage [0-100]')
-# parser.add_argument('output', help='output directory')
-args = parser.parse_args()
 
 def DoMarkdown(file):
 	script_dir = os.path.dirname(os.path.realpath(__file__))
@@ -115,11 +159,14 @@ def ProcessDir(indir, is_parent=True, subdirs=[]):
 	script_dir = os.path.dirname(os.path.realpath(__file__))
 	with open(script_dir+'/resources/index.html') as index_file:
 	    index = index_file.read()
+
+        cutTable = makeCutStr(indir)
 	
 	index = index.replace('{TITLE}', page_title)
 	index = index.replace('{ELEMENTS}', elements)
 	index = index.replace('{BUTTONS}', button_groups)
 	index = index.replace('{SEARCH}', search_box)
+	index = index.replace('{CUTS}',cutTable)
 	
 	all_other = ''
 	other_jump = ''
@@ -164,6 +211,13 @@ def ProcessDir(indir, is_parent=True, subdirs=[]):
 	with open(os.path.join(indir,'download_all.php'), "w") as outfile:
 	    outfile.write(php_downloader)
 
-dirs = [(x[0], x[1]) for x in os.walk(args.input)]
-for i, indir in enumerate(dirs):
-	ProcessDir(indir[0], is_parent=(i==0), subdirs=indir[1])
+if __name__ == "__main__":
+        parser = argparse.ArgumentParser()
+        parser.add_argument('input', help='input directory')
+        parser.add_argument('--verbose', '-v', action='store_true', help='print some info to the screen')
+        parser.add_argument('--title-size', default='100', help='scale the text size of the plot titles, expressed as a percentage [0-100]')
+        # parser.add_argument('output', help='output directory')
+        args = parser.parse_args()
+        dirs = [(x[0], x[1]) for x in os.walk(args.input)]
+        for i, indir in enumerate(dirs):
+            ProcessDir(indir[0], is_parent=(i==0), subdirs=indir[1])
